@@ -8,7 +8,7 @@
 int main() {
     const char* path = "demo.txt";
 
-    // ---------- WRITE PHASE ----------
+    // WRITE PHASE
 
     int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) { perror("open for write"); return 1; }
@@ -22,7 +22,7 @@ int main() {
     fsync(fd);
     close(fd);
 
-    // ---------- READ PHASE ----------
+    // READ PHASE 
 
     fd = open(path, O_RDONLY);
     if (fd < 0) { perror("open for read"); return 1; }
