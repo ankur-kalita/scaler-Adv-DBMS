@@ -1,6 +1,8 @@
 #include <iostream>
+#include <string>
+#include <vector>
 #include <algorithm>
-#include <iterator>
+#include <stdexcept>
 
 using namespace std;
 
@@ -8,6 +10,18 @@ struct Employee {
     string name;
     int id;
     int age;
+
+    // resolve a column name to its value on this row
+    int getInt(const string& col) const {
+        if (col == "id")  return id;
+        if (col == "age") return age;
+        throw runtime_error("Unknown column for int: " + col);
+    }
+
+    string getString(const string& col) const {
+        if (col == "name") return name;
+        throw runtime_error("Unknown column for string: " + col);
+    }
 };
 
 enum class TokenType {
@@ -214,31 +228,41 @@ private:
     int pos = 0;
 };
 
+// Resolve an expression node to an int: a column reads from the row,
+// a literal returns its own value. Lets applyFilter treat both sides the same.
+int getInt(Expression* expr, const Employee& row) {
+    if (auto* col = dynamic_cast<ColumnRef*>(expr))
+        return row.getInt(col->name);
+    if (auto* lit = dynamic_cast<Literal*>(expr))
+        return lit->value;
+    throw runtime_error("invalid expression in getInt");
+}
+
 bool applyFilter(Expression* expr, const Employee& row) {
-    if (auto* bin = dynamic_cast<BinaryExpression*>(expr)) {
-        if (bin->op == "OR")
-            return applyFilter(bin->left, row) || applyFilter(bin->right, row);
+    auto* bin = dynamic_cast<BinaryExpression*>(expr);
+    if (!bin) throw runtime_error("expression not valid");
 
-        auto* col = dynamic_cast<ColumnRef*>(bin->left);
-        auto* lit = dynamic_cast<Literal*>(bin->right);
-        int colVal = 0;
-        if (col->name == "id")  colVal = row.id;
-        else if (col->name == "age") colVal = row.age;
+    if (bin->op == "OR")
+        return applyFilter(bin->left, row) || applyFilter(bin->right, row);
 
-        if (bin->op == ">")  return colVal > lit->value;
-        if (bin->op == "<")  return colVal < lit->value;
-        if (bin->op == ">=") return colVal >= lit->value;
-        if (bin->op == "<=") return colVal <= lit->value;
-    }
-    return false;
+    // both sides resolved through getInt — works for column vs literal,
+    // literal vs column, or even column vs column
+    int left  = getInt(bin->left, row);
+    int right = getInt(bin->right, row);
+    if (bin->op == ">")  return left > right;
+    if (bin->op == "<")  return left < right;
+    if (bin->op == ">=") return left >= right;
+    if (bin->op == "<=") return left <= right;
+    if (bin->op == "=")  return left == right;
+    throw runtime_error("invalid operator");
 }
 
 void execute(SelectStatement& statement, const vector<Employee>& employees) {
     for (const auto& row : employees) {
         if (applyFilter(statement.whereFilter, row)) {
-            if (statement.column == "name")      cout << row.name << endl;
-            else if (statement.column == "id")   cout << row.id << endl;
-            else if (statement.column == "age")  cout << row.age << endl;
+            if (statement.column == "name")      cout << row.getString("name") << endl;
+            else if (statement.column == "id")   cout << row.getInt("id") << endl;
+            else if (statement.column == "age")  cout << row.getInt("age") << endl;
         }
     }
 }
